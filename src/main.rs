@@ -3,9 +3,9 @@ use std::fs;
 use std::io::{self, Write};
 use std::process;
 use walkdir::WalkDir;
+use regex::Regex;
 
 fn is_source_code_file(path: &std::path::Path) -> bool {
-    // List of source code file extensions
     let source_code_extensions = [
         "c", "cpp", "h", "hpp", "rs", "java", "py", "js", "ts", "go", "cs", "rb", "php", "swift",
     ];
@@ -18,22 +18,30 @@ fn is_source_code_file(path: &std::path::Path) -> bool {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: {} <path>", args[0]);
+    if args.len() < 2 || args.len() > 3 {
+        eprintln!("Usage: {} <path> [ignore_pattern]", args[0]);
         process::exit(1);
     }
 
     let path = &args[1];
+
+    let ignore_regex = args.get(2).and_then(|s| Regex::new(s).ok());
+
     for entry in WalkDir::new(path) {
         match entry {
             Ok(entry) => {
+                let file_path = entry.path();
+                let file_path_str = file_path.to_str().unwrap_or("");
+                if ignore_regex.as_ref().map(|r| r.is_match(file_path_str)).unwrap_or(false) {
+                    continue;
+                }
+
                 if entry.file_type().is_file() {
-                    let file_path = entry.path();
                     if is_source_code_file(file_path) {
-                        println!("File: {}", file_path.display());
+                        println!("{}", file_path.display());
                         match fs::read_to_string(file_path) {
                             Ok(content) => {
-                                println!("Contents:\n{}", content);
+                                println!("```\n{}\n```", content);
                             }
                             Err(err) => {
                                 eprintln!(
